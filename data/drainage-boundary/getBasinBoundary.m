@@ -1,3 +1,8 @@
+% PARAMETERS
+% Subsample both groups
+skip_coast    = 2;
+skip_interior = 150;
+
 % Input file
 filename = 'grndrainagesystems_ekholm.txt';  % Replace with your file path
 
@@ -35,28 +40,27 @@ ids = data{1};
 lat = data{2};
 lon = data{3};
 
-% Select records for ID 6.2
-targetID = 6.2;
+% Select records for target ID
+targetID = 1.1;
 mask = abs(ids - targetID) < 1e-8;
 
-lat_62 = lat(mask);
-lon_62 = lon(mask);
+lat_basin = lat(mask);
+lon_basin = lon(mask);
 
 % Combined array: column 1 = latitude, column 2 = longitude
-latlon_62 = [lat_62, lon_62];
+latlon_62 = [lat_basin, lon_basin];
 
 fprintf('Found %d records for ID %.1f.\n', nnz(mask), targetID);
 
 % Save the extracted coordinates
-results = table(lat_62, lon_62, ...
+results = table(lat_basin, lon_basin, ...
     'VariableNames', {'Latitude', 'Longitude'});
-% writetable(results, 'drainage_6_2.csv');
 
 % convert lat lon to EPSG 3413
-[xi, yi] = ll2psn(lat_62, lon_62);
+[xi, yi] = ll2psn(lat_basin, lon_basin);
 
 % Subsample interior points and retain all coastal points
-coast = expread('6.2-coast.exp');
+coast = expread('1.1-coast.exp');
 
 % Column vectors for consistent indexing
 xi = xi(:);
@@ -68,10 +72,6 @@ interior = ~in_coast;
 % Original indices of each group
 idx_coast = find(in_coast);
 idx_interior = find(interior);
-
-% Subsample both groups
-skip_coast    = 3;
-skip_interior = 200;
 
 idx_coast_ds = idx_coast(1:skip_coast:end);
 idx_interior_ds = idx_interior(1:skip_interior:end);
@@ -100,4 +100,4 @@ ylabel('y');
 title('Subsampled coastal + interior contour');
 
 % save to .exp file
-coordToExp([xi_merged, yi_merged], '6.2-downsample-boundary.exp')
+coordToExp([xi_merged, yi_merged], '1.1-downsample-boundary.exp')
