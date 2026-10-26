@@ -19,7 +19,7 @@ function [smb_out, x_out, y_out] = loadSMBGreenland(smb_root, model_request)
     rho_w = 1e3; % kg m^-3
     switch model_request
         case "RACMO"
-            smb_path = 'RACMO/GRN11_RACMO24p1_data/smbgl_monthlyS_GRN11_RACMO24p1_200601_201512.nc';
+            smb_path = 'RACMO/GrIS_RACMO24p1_data/smbgl_monthlyS_GRN11_RACMO24p1_200601_201512.nc';
             smb_path = [root_dir, smb_path];
             smb  = double(ncread(smb_path,'smbgl')); % unit: kg m-2
             day = double(ncread(smb_path,'time')); % days since 1950-01-01 00:00:00.0

@@ -1,6 +1,6 @@
 cd("/home/donglaiyang/Documents/Georgia-Tech/Research/petermann-basin-thermal-model")
 % -------------- PARAMETERS --------------
-sim_steps = [4];
+sim_steps = [5];
 nproc   = 20; 
 
 % load the flux boundary exp file
@@ -290,12 +290,19 @@ for steps = sim_steps
         [Ts_racmo, X_racmo, Y_racmo] = loadTsGreenland(Ts_root_path, 'RACMO');
         mean_Ts_racmo = mean(Ts_racmo, 3); % avg across the years
         Ts_racmo_interp_fn = scatteredInterpolant(X_racmo(:), Y_racmo(:), mean_Ts_racmo(:));
-        
+        Ts_interp = Ts_racmo_interp_fn(md2d.mesh.x, md2d.mesh.y);
 
-        % --------------TO BE IMPLEMENTED: LOAD SMB ------------------
+        % load surface mass balance
+        [smb_racmo, X_racmo, Y_racmo] = loadSMBGreenland( ...
+            smb_root_path, 'RACMO');
+        mean_smb_racmo = mean(smb_racmo, 3); % avg across the years
+        smb_racmo_interp_fn = scatteredInterpolant( ...
+            X_racmo(:), Y_racmo(:), mean_smb_racmo(:));
+        smb_interp = smb_racmo_interp_fn(md2d.mesh.x, md2d.mesh.y);
 
         % run the 1D model (2-5 mins)
-        T_interp_func = boundaryThermalProfile(md, ghf, Ts, smb, outflux_bound_xy, 'FD');
+        T_interp_func = boundaryThermalProfile( ...
+            md, ghf, Ts_interp, smb_interp, outflux_bound_xy, 'FD');
         vertexonboundary_idx = find(md.mesh.vertexonboundary);
 
         x_bound = md.mesh.x(logical(md.mesh.vertexonboundary));
@@ -310,10 +317,10 @@ for steps = sim_steps
         
         % thermal model: initial and surface boundary conditions
         md.thermal.spctemperature = NaN*ones(md.mesh.numberofvertices, 1);
-        md.thermal.spctemperature(find(md.mesh.vertexonsurface)) = Ts;
+        md.thermal.spctemperature(find(md.mesh.vertexonsurface)) = Ts_interp;
         md.thermal.spctemperature(influx_bound_idx) = T_interp;
         md.initialization.temperature = NaN*ones(md.mesh.numberofvertices, 1);
-        md.initialization.temperature(find(md.mesh.vertexonsurface)) = Ts;
+        md.initialization.temperature(find(md.mesh.vertexonsurface)) = Ts_interp;
         % make sure that no point exceeds pressure melting point
         replicate=repmat(md.geometry.surface-md.mesh.z,1,size(md.thermal.spctemperature,2));
         apm = md.materials.meltingpoint-md.materials.beta*md.materials.rho_ice*md.constants.g*replicate+1e-5;
@@ -322,14 +329,14 @@ for steps = sim_steps
         % initialize temperature
         % linear interpolate the englacial temperature
         dz = md.mesh.z(find(md.mesh.vertexonbase)) - md.mesh.z(find(md.mesh.vertexonsurface));
-        dTdz = (BTmean - STmean)./dz;
+        BTmean = (-5 + 273.15) * ones(md.mesh.numberofvertices2d,1); % just a first guess
+        dTdz = (BTmean - Ts_interp)./dz;
         dTdz_HO = repmat(dTdz, md.mesh.numberoflayers,1);
-        BTmean_HO = repmat(BTmean, md.mesh.numberoflayers*numel(dz), 1);
+        BTmean_HO = repmat(BTmean, md.mesh.numberoflayers, 1);
         md.initialization.temperature = BTmean_HO + dTdz_HO.*(md.mesh.z - md.geometry.base);
-        md.initialization.temperature(isnan(md.initialization.temperature)) = STmean;
 
         % specify surface mass balance
-        md.smb.mass_balance(find(md.mesh.vertexonsurface)) = smb;
+        md.smb.mass_balance(find(md.mesh.vertexonsurface)) = smb_interp;
         
         % initialize water (only required if using enthalpy method)
         md.initialization.watercolumn = zeros(md.mesh.numberofvertices,1);
