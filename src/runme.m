@@ -1,6 +1,6 @@
 cd("/home/donglaiyang/Documents/Georgia-Tech/Research/petermann-basin-thermal-model")
 % -------------- PARAMETERS --------------
-sim_steps = [5];
+sim_steps = [6];
 nproc   = 20; 
 
 % load the flux boundary exp file
@@ -378,27 +378,6 @@ for steps = sim_steps
             md.initialization.vy.^2 + ...
             md.initialization.vz.^2);
 
-        % % geothermal heat flux
-        % % load GHF posterior mean from the inference
-        % posterior_path = '/data-archive/ASE-inference/';
-        % ghf_posterior = load([posterior_path 'GHF/posterior_low_mean_high.mat']);
-        % ghf_mean_interp = InterpFromGridToMesh(ghf_posterior.x, ghf_posterior.y,...
-        %                                        ghf_posterior.posterior_mean,...
-        %                                        md.mesh.x2d, md.mesh.y2d, nan);
-        % % slightly extrapolate to areas under ice shelf
-        % % GHF there doesn't matter anyways
-        % nonnan_idx = ~isnan(ghf_mean_interp);
-        % nonnan_x   = md.mesh.x2d(nonnan_idx);
-        % nonnan_y   = md.mesh.y2d(nonnan_idx);
-        % nonnan_ghf = ghf_mean_interp(nonnan_idx);
-        % ghf_mean_interp_func = scatteredInterpolant(nonnan_x, nonnan_y,...
-        %                                             nonnan_ghf, 'linear','linear');
-        % ghf_mean_interp_full = ghf_mean_interp_func(md.mesh.x2d, md.mesh.y2d) * 1e-3; % convert to W/m^2
-        % 
-        % ghf_prefactor = 0.7; % ad hoc measure to make interior cooler
-        % 
-        % md.basalforcings.geothermalflux = ghf_prefactor * repmat(ghf_mean_interp_full, md.mesh.numberoflayers,1);
-
         % solver specification
         md.timestepping.time_step = 0;
         md.timestepping.final_time = 0;
@@ -421,7 +400,7 @@ for steps = sim_steps
         % ----------- do a long-term relaxation ------------------------
         % first a fixed timestep to ensure stability
         md.transient.isthermal = 0;
-        md.transient.isgroundingline = 1;
+        md.transient.isgroundingline = 0;
 
         md.timestepping.time_step  = 0.005;
         md.timestepping.final_time = 3;
@@ -435,8 +414,8 @@ for steps = sim_steps
         md = solve(md,'tr');
         md = loadresultsfromcluster(md);
 
-        % save an immediate version just in case
-        save([result_small_data_dir 'model/intermediate/ASE_before_thermal_transient_relax.mat'],'md')
+        % % save an immediate version just in case
+        % save([result_small_data_dir 'model/intermediate/ASE_before_thermal_transient_relax.mat'],'md')
 
         % --------- relaxed with adaptive time stepping ------------------
         % coupled with thermal solution

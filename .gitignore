@@ -2,3 +2,11 @@
 *.nc
 *.tif
 *.tiff
+*.bin
+*.errlog
+*.outlog
+*.queue
+*.toolkits
+*.asv
+*.tar.gz
+
