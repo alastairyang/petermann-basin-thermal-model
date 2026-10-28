@@ -1,6 +1,6 @@
 cd("/home/donglaiyang/Documents/Georgia-Tech/Research/petermann-basin-thermal-model")
 % -------------- PARAMETERS --------------
-sim_steps = [6];
+sim_steps = [7];
 nproc   = 20; 
 
 % load the flux boundary exp file
@@ -46,6 +46,7 @@ vx_path  = [common_data_dir 'velocity/greenland/greenland_vel_mosaic250_vx_v1.ti
 vy_path  = [common_data_dir 'velocity/greenland/greenland_vel_mosaic250_vy_v1.tif'];
 smb_root_path = [common_data_dir 'smb/'];
 Ts_root_path  = [common_data_dir 'surface-temperature/'];
+GHF_path = [project_data_dir 'GHF/GHF_random_fields.mat'];
 
 md.cluster = generic('name',oshostname(),'np',nproc);
 md.cluster
@@ -450,15 +451,61 @@ for steps = sim_steps
         savemodel(org,md);
     end
 
-
-
     if perform(org,'GHFPerturbed') % {{{7 step 7 GHF perturbations
         % Thermal solves with random fields of GHF forcings
         stepname = 'GHFPerturbed';
         md = loadmodel(org, 'ThermalSteadyState');
+        md = transientrestart(md);
+        % load the GHF data
+        GHF_fields = load(GHF_path);
+        n_fields = size(GHF_fields.fields, 3);
 
+        for ii = 365:n_fields
+            GHF = GHF_fields.fields(:,:, ii);
+            GHF_interp = InterpFromGridToMesh( ...
+                GHF_fields.x, ...
+                GHF_fields.y, ...
+                GHF, ...
+                md.mesh.x2d, ...
+                md.mesh.y2d, ...
+                mean(GHF(:),'omitnan'));
+            % slight extrapolation
+            is_real = ~isnan(GHF_interp);
+            GHF_interp_fn = scatteredInterpolant( ...
+                md.mesh.x2d(is_real), ...
+                md.mesh.y2d(is_real), ...
+                GHF_interp(is_real), ...
+                'linear','linear');
+            GHF_interp = GHF_interp_fn( ...
+                md.mesh.x2d, ...
+                md.mesh.y2d);
+           
+            % some checks
+            if any(GHF_interp < 0)
+                fprintf("Find %d negative GHF values", sum(GHF_interp < 0))
+                GHF_interp(GHF_interp < 0) = mean(GHF(:),'omitnan');
+            end
+            
+            md_p = md;
+            GHF_interp_full = repmat(GHF_interp, [md.mesh.numberoflayers,1]);
+            md_p.basalforcings.geothermalflux = GHF_interp_full;
 
+            md_p.timestepping = timestepping();
+            md_p.timestepping.time_step = 0;
+            md_p = solve(md_p, 'thermal');
+            md_p = loadresultsfromcluster(md_p);
+            
+            % save basal enthalpy and GHF
+            output.x_vertex = md_p.mesh.x2d;
+            output.y_vertex = md_p.mesh.y2d;
+            output.GHF = GHF_interp;
+            output.Eb = project2d(md_p, md_p.results.ThermalSolution.Enthalpy,1);
+            save_dir = [result_large_data_dir 'Eb_GHF_' num2str(ii) '.mat'];
+            save(save_dir, 'output');
 
+        end
+            
+            
     end
         
 end
