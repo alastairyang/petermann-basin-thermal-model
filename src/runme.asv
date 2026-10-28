@@ -1,16 +1,16 @@
 cd("/home/donglaiyang/Documents/Georgia-Tech/Research/petermann-basin-thermal-model")
 % -------------- PARAMETERS --------------
-sim_steps = [5];
+sim_steps = [1,2,3,4,5];
 nproc   = 20; 
 
 % load the flux boundary exp file
-outflux_bound = 'data/drainage-boundary/1.1-coast.exp';
+outflux_bound = 'data/drainage-boundary/1.1-1.2-coast.exp';
 outflux_bound = expread(outflux_bound);
 outflux_bound_xy = [outflux_bound.x, outflux_bound.y];
 % -----------------------------------------
 
 % ---------- name - expfile pair
-drainage_filename = 'drainage-boundary/1.1-downsample-boundary.exp';
+drainage_filename = 'drainage-boundary/1.1-1.2-downsample-boundary.exp';
 
 % ---------- END OF PARAMETERS --------------
 % get the environmental variables
@@ -46,9 +46,6 @@ vx_path  = [common_data_dir 'velocity/greenland/greenland_vel_mosaic250_vx_v1.ti
 vy_path  = [common_data_dir 'velocity/greenland/greenland_vel_mosaic250_vy_v1.tif'];
 smb_root_path = [common_data_dir 'smb/'];
 Ts_root_path  = [common_data_dir 'surface-temperature/'];
-
-save_folder = [result_large_data_dir 'thermal-training-data/Thwaites-PIG/training/raw/'];
-
 
 md.cluster = generic('name',oshostname(),'np',nproc);
 md.cluster
@@ -300,9 +297,6 @@ for steps = sim_steps
             X_racmo(:), Y_racmo(:), mean_smb_racmo(:));
         smb_interp = smb_racmo_interp_fn(md2d.mesh.x, md2d.mesh.y);
 
-
-        % --------------TO BE IMPLEMENTED: LOAD SMB ------------------
-
         % run the 1D model (2-5 mins)
         T_interp_func = boundaryThermalProfile( ...
             md, ghf, Ts_interp, smb_interp, outflux_bound_xy, 'FD');
@@ -332,12 +326,11 @@ for steps = sim_steps
         % initialize temperature
         % linear interpolate the englacial temperature
         dz = md.mesh.z(find(md.mesh.vertexonbase)) - md.mesh.z(find(md.mesh.vertexonsurface));
-        BTmean = -5 + 273.15); % use only as a first guess for model initialization
-        dTdz = (BTmean - STmean)./dz;
+        BTmean = (-5 + 273.15) * ones(md.mesh.numberofvertices2d,1); % just a first guess
+        dTdz = (BTmean - Ts_interp)./dz;
         dTdz_HO = repmat(dTdz, md.mesh.numberoflayers,1);
-        BTmean_HO = repmat(BTmean, md.mesh.numberoflayers*numel(dz), 1);
+        BTmean_HO = repmat(BTmean, md.mesh.numberoflayers, 1);
         md.initialization.temperature = BTmean_HO + dTdz_HO.*(md.mesh.z - md.geometry.base);
-        md.initialization.temperature(isnan(md.initialization.temperature)) = STmean;
 
         % specify surface mass balance
         md.smb.mass_balance(find(md.mesh.vertexonsurface)) = smb_interp;
@@ -382,27 +375,6 @@ for steps = sim_steps
             md.initialization.vy.^2 + ...
             md.initialization.vz.^2);
 
-        % % geothermal heat flux
-        % % load GHF posterior mean from the inference
-        % posterior_path = '/data-archive/ASE-inference/';
-        % ghf_posterior = load([posterior_path 'GHF/posterior_low_mean_high.mat']);
-        % ghf_mean_interp = InterpFromGridToMesh(ghf_posterior.x, ghf_posterior.y,...
-        %                                        ghf_posterior.posterior_mean,...
-        %                                        md.mesh.x2d, md.mesh.y2d, nan);
-        % % slightly extrapolate to areas under ice shelf
-        % % GHF there doesn't matter anyways
-        % nonnan_idx = ~isnan(ghf_mean_interp);
-        % nonnan_x   = md.mesh.x2d(nonnan_idx);
-        % nonnan_y   = md.mesh.y2d(nonnan_idx);
-        % nonnan_ghf = ghf_mean_interp(nonnan_idx);
-        % ghf_mean_interp_func = scatteredInterpolant(nonnan_x, nonnan_y,...
-        %                                             nonnan_ghf, 'linear','linear');
-        % ghf_mean_interp_full = ghf_mean_interp_func(md.mesh.x2d, md.mesh.y2d) * 1e-3; % convert to W/m^2
-        % 
-        % ghf_prefactor = 0.7; % ad hoc measure to make interior cooler
-        % 
-        % md.basalforcings.geothermalflux = ghf_prefactor * repmat(ghf_mean_interp_full, md.mesh.numberoflayers,1);
-
         % solver specification
         md.timestepping.time_step = 0;
         md.timestepping.final_time = 0;
@@ -425,7 +397,7 @@ for steps = sim_steps
         % ----------- do a long-term relaxation ------------------------
         % first a fixed timestep to ensure stability
         md.transient.isthermal = 0;
-        md.transient.isgroundingline = 1;
+        md.transient.isgroundingline = 0;
 
         md.timestepping.time_step  = 0.005;
         md.timestepping.final_time = 3;
@@ -439,8 +411,8 @@ for steps = sim_steps
         md = solve(md,'tr');
         md = loadresultsfromcluster(md);
 
-        % save an immediate version just in case
-        save([result_small_data_dir 'model/intermediate/ASE_before_thermal_transient_relax.mat'],'md')
+        % % save an immediate version just in case
+        % save([result_small_data_dir 'model/intermediate/ASE_before_thermal_transient_relax.mat'],'md')
 
         % --------- relaxed with adaptive time stepping ------------------
         % coupled with thermal solution

@@ -4,13 +4,13 @@ sim_steps = [6];
 nproc   = 20; 
 
 % load the flux boundary exp file
-outflux_bound = 'data/drainage-boundary/1.1-coast.exp';
+outflux_bound = 'data/drainage-boundary/1.1-1.2-coast.exp';
 outflux_bound = expread(outflux_bound);
 outflux_bound_xy = [outflux_bound.x, outflux_bound.y];
 % -----------------------------------------
 
 % ---------- name - expfile pair
-drainage_filename = 'drainage-boundary/1.1-downsample-boundary.exp';
+drainage_filename = 'drainage-boundary/1.1-1.2-downsample-boundary.exp';
 
 % ---------- END OF PARAMETERS --------------
 % get the environmental variables
@@ -46,9 +46,6 @@ vx_path  = [common_data_dir 'velocity/greenland/greenland_vel_mosaic250_vx_v1.ti
 vy_path  = [common_data_dir 'velocity/greenland/greenland_vel_mosaic250_vy_v1.tif'];
 smb_root_path = [common_data_dir 'smb/'];
 Ts_root_path  = [common_data_dir 'surface-temperature/'];
-
-save_folder = [result_large_data_dir 'thermal-training-data/Thwaites-PIG/training/raw/'];
-
 
 md.cluster = generic('name',oshostname(),'np',nproc);
 md.cluster
@@ -427,8 +424,15 @@ for steps = sim_steps
         md.thermal.spctemperature(find(md.thermal.spctemperature > apm)) = apm(md.thermal.spctemperature > apm);
         md.transient.isthermal = 1;
 
+        % previous temperature solution may contain anomaly; we treat them
+        % here
+        lowT = 200 * ones(md.mesh.numberofvertices,1); % kelvin
+        temperature_new = clip(md.initialization.temperature, ...
+            lowT, apm);
+        md.initialization.temperature = temperature_new;
         md.materials.rheology_law = 'Cuffey';
-        md.initialization.temperature   = md.results.ThermalSolution.Temperature;
+        md.materials.rheology_B = cuffey(md.initialization.temperature);
+
         md.initialization.waterfraction = md.results.ThermalSolution.Waterfraction;
         md.initialization.watercolumn   = md.results.ThermalSolution.Watercolumn;
         
@@ -447,6 +451,15 @@ for steps = sim_steps
     end
 
 
+
+    if perform(org,'GHFPerturbed') % {{{7 step 7 GHF perturbations
+        % Thermal solves with random fields of GHF forcings
+        stepname = 'GHFPerturbed';
+        md = loadmodel(org, 'ThermalSteadyState');
+
+
+
+    end
         
 end
 
